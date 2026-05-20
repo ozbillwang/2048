@@ -7,6 +7,7 @@ const TILE_GAP := 12.0
 const SWIPE_THRESHOLD := 42.0
 const SAVE_PATH := "user://score.cfg"
 const SAMPLE_RATE := 44100
+const UI_FONT := preload("res://assets/fonts/ArialUnicode.ttf")
 
 const MOVE_TIME := 0.14
 const POP_TIME := 0.12
@@ -44,6 +45,7 @@ var is_animating := false
 var sound_enabled := true
 var touch_start := Vector2.ZERO
 var theme_index := 0
+var language := "en"
 
 var bg_rect: ColorRect
 var margin_container: MarginContainer
@@ -51,10 +53,14 @@ var root_box: VBoxContainer
 var title_label: Label
 var score_label: Label
 var best_label: Label
+var score_caption_label: Label
+var best_caption_label: Label
 var theme_button: Button
 var sound_button: Button
+var language_button: Button
 var status_label: Label
 var new_game_button: Button
+var new_game_dialog: ConfirmationDialog
 var board_area: Control
 var board_panel: Panel
 var tile_layer: Control
@@ -69,6 +75,7 @@ func _ready() -> void:
 	best_score = _load_best_score()
 	theme_index = _load_theme_index()
 	sound_enabled = _load_sound_enabled()
+	language = _load_language()
 	_apply_theme_values()
 	_build_ui()
 	_build_audio()
@@ -92,7 +99,7 @@ func _input(event: InputEvent) -> void:
 			KEY_DOWN, KEY_S:
 				_try_move(Vector2i.DOWN)
 			KEY_R:
-				reset_game()
+				_request_new_game()
 	elif event is InputEventScreenTouch:
 		if event.pressed:
 			touch_start = event.position
@@ -133,6 +140,7 @@ func _build_ui() -> void:
 	title_label.text = "Merge\n2048"
 	title_label.add_theme_color_override("font_color", TEXT_LIGHT)
 	title_label.add_theme_font_size_override("font_size", 38)
+	title_label.add_theme_font_override("font", UI_FONT)
 	title_label.add_theme_stylebox_override("normal", _style(TITLE_COLOR, 8))
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -140,11 +148,13 @@ func _build_ui() -> void:
 	title_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	header.add_child(title_label)
 
-	score_label = _make_score_box("SCORE", "0")
+	score_label = _make_score_box("score", "0")
 	header.add_child(score_label.get_parent().get_parent())
+	score_caption_label = score_label.get_parent().get_child(0) as Label
 
-	best_label = _make_score_box("BEST", "0")
+	best_label = _make_score_box("best", "0")
 	header.add_child(best_label.get_parent().get_parent())
+	best_caption_label = best_label.get_parent().get_child(0) as Label
 
 	status_label = Label.new()
 	status_label.text = "Swipe to move. Join matching tiles."
@@ -152,6 +162,7 @@ func _build_ui() -> void:
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label.add_theme_color_override("font_color", TEXT_MUTED)
 	status_label.add_theme_font_size_override("font_size", 18)
+	status_label.add_theme_font_override("font", UI_FONT)
 	root_box.add_child(status_label)
 
 	board_area = Control.new()
@@ -183,6 +194,7 @@ func _build_ui() -> void:
 		tile.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		tile.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 		tile.add_theme_font_size_override("font_size", 34)
+		tile.add_theme_font_override("font", UI_FONT)
 		tile.hide()
 		tile_layer.add_child(tile)
 		tile_nodes.append(tile)
@@ -201,7 +213,7 @@ func _build_ui() -> void:
 	new_game_button.add_theme_stylebox_override("normal", _style(ACCENT, 6))
 	new_game_button.add_theme_stylebox_override("hover", _style(Color("#ff826f"), 6))
 	new_game_button.add_theme_stylebox_override("pressed", _style(ACCENT_DARK, 6))
-	new_game_button.pressed.connect(reset_game)
+	new_game_button.pressed.connect(_request_new_game)
 	action_row.add_child(new_game_button)
 
 	theme_button = Button.new()
@@ -217,7 +229,15 @@ func _build_ui() -> void:
 	sound_button.add_theme_font_size_override("font_size", 16)
 	sound_button.pressed.connect(_toggle_sound)
 	action_row.add_child(sound_button)
+
+	language_button = Button.new()
+	language_button.custom_minimum_size = Vector2(58, 48)
+	language_button.add_theme_font_size_override("font_size", 16)
+	language_button.pressed.connect(_toggle_language)
+	action_row.add_child(language_button)
 	_apply_theme_to_ui()
+	_apply_language_to_ui()
+	_build_new_game_dialog()
 
 
 func _make_score_box(caption: String, value: String) -> Label:
@@ -235,6 +255,7 @@ func _make_score_box(caption: String, value: String) -> Label:
 	caption_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	caption_label.add_theme_color_override("font_color", Color("#b8e4dd"))
 	caption_label.add_theme_font_size_override("font_size", 12)
+	caption_label.add_theme_font_override("font", UI_FONT)
 	box.add_child(caption_label)
 
 	var value_label := Label.new()
@@ -242,6 +263,7 @@ func _make_score_box(caption: String, value: String) -> Label:
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	value_label.add_theme_color_override("font_color", TEXT_LIGHT)
 	value_label.add_theme_font_size_override("font_size", 21)
+	value_label.add_theme_font_override("font", UI_FONT)
 	box.add_child(value_label)
 	return value_label
 
@@ -251,6 +273,7 @@ func _cycle_theme() -> void:
 	_apply_theme_values()
 	_save_settings()
 	_apply_theme_to_ui()
+	_apply_language_to_ui()
 	_update_ui(false)
 
 
@@ -258,6 +281,13 @@ func _toggle_sound() -> void:
 	sound_enabled = not sound_enabled
 	_save_settings()
 	_apply_theme_to_ui()
+	_apply_language_to_ui()
+
+
+func _toggle_language() -> void:
+	language = "zh" if language == "en" else "en"
+	_save_settings()
+	_apply_language_to_ui()
 
 
 func _apply_theme_values() -> void:
@@ -293,9 +323,94 @@ func _apply_theme_to_ui() -> void:
 
 	_style_score_box(score_label)
 	_style_score_box(best_label)
-	_style_button(new_game_button, "New Game")
+	_style_button(new_game_button, _tr("new_game"))
 	_style_button(theme_button, THEME_PRESETS[theme_index].name)
-	_style_button(sound_button, "Sound On" if sound_enabled else "Sound Off")
+	_style_button(sound_button, _tr("sound_on") if sound_enabled else _tr("sound_off"))
+	_style_button(language_button, "中" if language == "en" else "EN")
+	_update_new_game_dialog_text()
+
+
+func _apply_language_to_ui() -> void:
+	if not title_label:
+		return
+	title_label.text = _tr("title")
+	score_caption_label.text = _tr("score")
+	best_caption_label.text = _tr("best")
+	_style_button(new_game_button, _tr("new_game"))
+	_style_button(sound_button, _tr("sound_on") if sound_enabled else _tr("sound_off"))
+	_style_button(language_button, "中" if language == "en" else "EN")
+	_update_new_game_dialog_text()
+
+	if game_over:
+		status_label.text = _tr("game_over") % score
+	elif has_won:
+		status_label.text = _tr("win")
+	else:
+		status_label.text = _tr("hint")
+
+
+func _tr(key: String) -> String:
+	var zh := language == "zh"
+	match key:
+		"title":
+			return "合成\n2048" if zh else "Merge\n2048"
+		"score":
+			return "分数" if zh else "SCORE"
+		"best":
+			return "最佳" if zh else "BEST"
+		"new_game":
+			return "新游戏" if zh else "New Game"
+		"confirm_new_game_title":
+			return "开始新游戏？" if zh else "Start new game?"
+		"confirm_new_game_body":
+			return "当前游戏会结束，确定要重新开始吗？" if zh else "Your current game will end. Start over?"
+		"confirm":
+			return "确定" if zh else "Yes"
+		"cancel":
+			return "继续" if zh else "Keep Playing"
+		"sound_on":
+			return "音效开" if zh else "Sound On"
+		"sound_off":
+			return "音效关" if zh else "Sound Off"
+		"hint":
+			return "滑动方块，合并相同数字。" if zh else "Swipe to move. Join matching tiles."
+		"win":
+			return "达到 2048！继续挑战。" if zh else "2048 reached. Keep going."
+		"game_over":
+			return "无路可走。最终分数：%s。" if zh else "No moves left. Final score: %s."
+	return key
+
+
+func _build_new_game_dialog() -> void:
+	new_game_dialog = ConfirmationDialog.new()
+	new_game_dialog.confirmed.connect(reset_game)
+	add_child(new_game_dialog)
+	_update_new_game_dialog_text()
+
+
+func _update_new_game_dialog_text() -> void:
+	if not new_game_dialog:
+		return
+	new_game_dialog.title = _tr("confirm_new_game_title")
+	new_game_dialog.dialog_text = _tr("confirm_new_game_body")
+	new_game_dialog.ok_button_text = _tr("confirm")
+	new_game_dialog.cancel_button_text = _tr("cancel")
+
+
+func _request_new_game() -> void:
+	if _is_fresh_game():
+		reset_game()
+		return
+	new_game_dialog.popup_centered()
+
+
+func _is_fresh_game() -> bool:
+	var occupied := 0
+	for y in range(SIZE):
+		for x in range(SIZE):
+			if board[y][x] != 0:
+				occupied += 1
+	return score == 0 and occupied <= START_TILES
 
 
 func _style_score_box(value_label: Label) -> void:
@@ -309,6 +424,7 @@ func _style_score_box(value_label: Label) -> void:
 func _style_button(button: Button, label: String) -> void:
 	button.text = label
 	button.add_theme_color_override("font_color", TEXT_LIGHT)
+	button.add_theme_font_override("font", UI_FONT)
 	button.add_theme_stylebox_override("normal", _style(ACCENT, 6))
 	button.add_theme_stylebox_override("hover", _style(ACCENT.lightened(0.12), 6))
 	button.add_theme_stylebox_override("pressed", _style(ACCENT_DARK, 6))
@@ -516,12 +632,12 @@ func _update_ui(animated: bool) -> void:
 
 	if reached_target and not has_won:
 		has_won = true
-		status_label.text = "2048 reached. Keep going."
+		status_label.text = _tr("win")
 	elif not _has_moves():
 		game_over = true
-		status_label.text = "No moves left. Final score: %s." % score
+		status_label.text = _tr("game_over") % score
 	elif not has_won:
-		status_label.text = "Swipe to move. Join matching tiles."
+		status_label.text = _tr("hint")
 
 	_layout_board()
 
@@ -588,6 +704,7 @@ func _make_tile_label(value: int) -> Label:
 	tile.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tile.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	tile.text = str(value)
+	tile.add_theme_font_override("font", UI_FONT)
 	tile.add_theme_color_override("font_color", TEXT_DARK if value <= 4 else TEXT_LIGHT)
 	tile.add_theme_stylebox_override("normal", _style(TILE_COLORS.get(value, Color("#3c3a32")), 6))
 	_update_tile_font(tile, value)
@@ -705,6 +822,14 @@ func _load_sound_enabled() -> bool:
 	return bool(config.get_value("game", "sound_enabled", true))
 
 
+func _load_language() -> String:
+	var config := ConfigFile.new()
+	if config.load(SAVE_PATH) != OK:
+		return "en"
+	var saved := str(config.get_value("game", "language", "en"))
+	return "zh" if saved == "zh" else "en"
+
+
 func _save_best_score() -> void:
 	_save_settings()
 
@@ -715,4 +840,5 @@ func _save_settings() -> void:
 	config.set_value("game", "best_score", best_score)
 	config.set_value("game", "theme_index", theme_index)
 	config.set_value("game", "sound_enabled", sound_enabled)
+	config.set_value("game", "language", language)
 	config.save(SAVE_PATH)

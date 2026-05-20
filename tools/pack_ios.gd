@@ -10,11 +10,13 @@ func _init() -> void:
 		return
 
 	for path in [
-		"res://project.godot",
-		"res://scenes/main.tscn",
-		"res://src/main.gd",
-		"res://assets/icon.svg"
-	]:
+			"res://project.godot",
+			"res://scenes/main.tscn",
+			"res://src/main.gd",
+			"res://assets/icon.svg",
+			"res://assets/fonts/ArialUnicode.ttf.import",
+			"res://assets/fonts/ArialUnicode.ttf"
+		]:
 		err = packer.add_file(path, ProjectSettings.globalize_path(path))
 		if err != OK:
 			push_error("Could not add %s: %s" % [path, err])
