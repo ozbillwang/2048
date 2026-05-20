@@ -7,7 +7,7 @@ const TILE_GAP := 12.0
 const SWIPE_THRESHOLD := 42.0
 const SAVE_PATH := "user://score.cfg"
 const SAMPLE_RATE := 44100
-const UI_FONT := preload("res://assets/fonts/ArialUnicode.ttf")
+const UI_FONT_PATH := "res://assets/fonts/ArialUnicode.ttf"
 
 const MOVE_TIME := 0.14
 const POP_TIME := 0.12
@@ -46,6 +46,7 @@ var sound_enabled := true
 var touch_start := Vector2.ZERO
 var theme_index := 0
 var language := "en"
+var ui_font: Font
 
 var bg_rect: ColorRect
 var margin_container: MarginContainer
@@ -72,6 +73,7 @@ var tile_nodes: Array[Label] = []
 
 func _ready() -> void:
 	randomize()
+	ui_font = _load_ui_font()
 	best_score = _load_best_score()
 	theme_index = _load_theme_index()
 	sound_enabled = _load_sound_enabled()
@@ -140,7 +142,7 @@ func _build_ui() -> void:
 	title_label.text = "Merge\n2048"
 	title_label.add_theme_color_override("font_color", TEXT_LIGHT)
 	title_label.add_theme_font_size_override("font_size", 38)
-	title_label.add_theme_font_override("font", UI_FONT)
+	_apply_ui_font(title_label)
 	title_label.add_theme_stylebox_override("normal", _style(TITLE_COLOR, 8))
 	title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -162,7 +164,7 @@ func _build_ui() -> void:
 	status_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	status_label.add_theme_color_override("font_color", TEXT_MUTED)
 	status_label.add_theme_font_size_override("font_size", 18)
-	status_label.add_theme_font_override("font", UI_FONT)
+	_apply_ui_font(status_label)
 	root_box.add_child(status_label)
 
 	board_area = Control.new()
@@ -193,8 +195,9 @@ func _build_ui() -> void:
 		tile.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		tile.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		tile.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		tile.add_theme_font_size_override("font_size", 34)
-		tile.add_theme_font_override("font", UI_FONT)
+		tile.add_theme_font_size_override("font_size", 39)
+		tile.add_theme_constant_override("outline_size", 1)
+		_apply_ui_font(tile)
 		tile.hide()
 		tile_layer.add_child(tile)
 		tile_nodes.append(tile)
@@ -255,7 +258,7 @@ func _make_score_box(caption: String, value: String) -> Label:
 	caption_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	caption_label.add_theme_color_override("font_color", Color("#b8e4dd"))
 	caption_label.add_theme_font_size_override("font_size", 12)
-	caption_label.add_theme_font_override("font", UI_FONT)
+	_apply_ui_font(caption_label)
 	box.add_child(caption_label)
 
 	var value_label := Label.new()
@@ -263,7 +266,7 @@ func _make_score_box(caption: String, value: String) -> Label:
 	value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	value_label.add_theme_color_override("font_color", TEXT_LIGHT)
 	value_label.add_theme_font_size_override("font_size", 21)
-	value_label.add_theme_font_override("font", UI_FONT)
+	_apply_ui_font(value_label)
 	box.add_child(value_label)
 	return value_label
 
@@ -424,7 +427,7 @@ func _style_score_box(value_label: Label) -> void:
 func _style_button(button: Button, label: String) -> void:
 	button.text = label
 	button.add_theme_color_override("font_color", TEXT_LIGHT)
-	button.add_theme_font_override("font", UI_FONT)
+	_apply_ui_font(button)
 	button.add_theme_stylebox_override("normal", _style(ACCENT, 6))
 	button.add_theme_stylebox_override("hover", _style(ACCENT.lightened(0.12), 6))
 	button.add_theme_stylebox_override("pressed", _style(ACCENT_DARK, 6))
@@ -438,6 +441,20 @@ func _style(color: Color, radius: int) -> StyleBoxFlat:
 	box.corner_radius_bottom_left = radius
 	box.corner_radius_bottom_right = radius
 	return box
+
+
+func _load_ui_font() -> Font:
+	var font := FontFile.new()
+	var err := font.load_dynamic_font(UI_FONT_PATH)
+	if err != OK:
+		push_warning("Could not load UI font: %s" % err)
+		return null
+	return font
+
+
+func _apply_ui_font(control: Control) -> void:
+	if ui_font:
+		control.add_theme_font_override("font", ui_font)
 
 
 func _build_audio() -> void:
@@ -649,7 +666,7 @@ func _draw_tile(x: int, y: int, value: int, animated: bool) -> void:
 		return
 
 	tile.text = str(value)
-	tile.add_theme_color_override("font_color", TEXT_DARK if value <= 4 else TEXT_LIGHT)
+	_apply_tile_text_style(tile, value)
 	tile.add_theme_stylebox_override("normal", _style(TILE_COLORS.get(value, Color("#3c3a32")), 6))
 	tile.show()
 	_update_tile_font(tile, value)
@@ -704,8 +721,8 @@ func _make_tile_label(value: int) -> Label:
 	tile.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	tile.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	tile.text = str(value)
-	tile.add_theme_font_override("font", UI_FONT)
-	tile.add_theme_color_override("font_color", TEXT_DARK if value <= 4 else TEXT_LIGHT)
+	_apply_ui_font(tile)
+	_apply_tile_text_style(tile, value)
 	tile.add_theme_stylebox_override("normal", _style(TILE_COLORS.get(value, Color("#3c3a32")), 6))
 	_update_tile_font(tile, value)
 	return tile
@@ -734,12 +751,19 @@ func _pop_merged_tiles(moves: Array[Dictionary]) -> void:
 
 
 func _update_tile_font(tile: Label, value: int) -> void:
-	var size := 34
+	var size := 39
 	if value >= 1024:
-		size = 27
+		size = 30
 	elif value >= 128:
-		size = 31
+		size = 35
 	tile.add_theme_font_size_override("font_size", size)
+
+
+func _apply_tile_text_style(tile: Label, value: int) -> void:
+	var color := TEXT_DARK if value <= 4 else TEXT_LIGHT
+	tile.add_theme_color_override("font_color", color)
+	tile.add_theme_color_override("font_outline_color", color)
+	tile.add_theme_constant_override("outline_size", 1)
 
 
 func _handle_swipe(delta: Vector2) -> void:

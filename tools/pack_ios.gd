@@ -1,7 +1,7 @@
 extends SceneTree
 
 func _init() -> void:
-	var output_path := "res://build/ios_project/godot_apple_embedded/godot_apple_embedded.pck"
+	var output_path := "res://build/ios_project/godot_apple_embedded.pck"
 	var packer := PCKPacker.new()
 	var err := packer.pck_start(output_path)
 	if err != OK:
@@ -15,7 +15,8 @@ func _init() -> void:
 			"res://src/main.gd",
 			"res://assets/icon.svg",
 			"res://assets/fonts/ArialUnicode.ttf.import",
-			"res://assets/fonts/ArialUnicode.ttf"
+			"res://assets/fonts/ArialUnicode.ttf",
+			"res://.godot/imported/ArialUnicode.ttf-365b2d9f05bcc44f2e3448fb6ab32cfa.fontdata"
 		]:
 		err = packer.add_file(path, ProjectSettings.globalize_path(path))
 		if err != OK:
