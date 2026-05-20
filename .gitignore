@@ -1,0 +1,29 @@
+# Godot local/editor state
+.godot/
+*.tmp
+*.translation
+
+# Generated script/resource UIDs
+*.gd.uid
+*.uid
+
+# Build/export output
+build/
+exports/
+*.pck
+*.ipa
+*.app
+*.dSYM/
+*.xcarchive/
+
+# Xcode local output
+DerivedData/
+*.xcuserdata/
+*.xcuserstate
+
+# Generated diagnostics/dumps
+extension_api.json
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
